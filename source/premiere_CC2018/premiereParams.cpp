@@ -59,7 +59,7 @@ prMALError generateDefaultParams(exportStdParms *stdParms, exGenerateDefaultPara
         widthParam.paramType = exParamType_int;
         widthParam.flags = exParamFlag_none;
         widthValues.rangeMin.intValue = 16;
-        widthValues.rangeMax.intValue = 8192;
+        widthValues.rangeMax.intValue = 16384;
         widthValues.value.intValue = seqWidth.mInt32;
         widthValues.disabled = kPrFalse;
         widthValues.hidden = kPrFalse;
@@ -72,7 +72,7 @@ prMALError generateDefaultParams(exportStdParms *stdParms, exGenerateDefaultPara
         heightParam.paramType = exParamType_int;
         heightParam.flags = exParamFlag_none;
         heightValues.rangeMin.intValue = 16;
-        heightValues.rangeMax.intValue = 8192;
+        heightValues.rangeMax.intValue = 16384;
         heightValues.value.intValue = seqHeight.mInt32;
         heightValues.disabled = kPrFalse;
         heightValues.hidden = kPrFalse;
@@ -397,7 +397,7 @@ prMALError validateParamChanged(exportStdParms *stdParmsP, exParamChangedRec *va
             ADBEVideoQuality,
             &toValidate);
 
-        toValidate.disabled = !enableQuality;
+        toValidate.hidden = !enableQuality;
         settings->exportParamSuite->ChangeParam(exID, 0, ADBEVideoQuality, &toValidate);
     }
 
