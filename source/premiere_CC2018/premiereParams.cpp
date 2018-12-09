@@ -5,6 +5,13 @@
 
 const int k_chunkingMin = 1;
 const int k_chunkingMax = 64;
+const int k_chunkingBlockSize = 1920*1200;
+enum HapChunkOption {
+    kHapChunkNone = 0,
+    kHapChunkAuto = 1,
+    kHapChunkManual = 2
+};
+void chunkSettingsHandler(const csSDK_uint32 exID, ExportSettings *settings);
 
 prMALError generateDefaultParams(exportStdParms *stdParms, exGenerateDefaultParamRec *generateDefaultParamRec)
 {
@@ -119,15 +126,28 @@ prMALError generateDefaultParams(exportStdParms *stdParms, exGenerateDefaultPara
         frameRateParam.paramValues = frameRateValues;
         exportParamSuite->AddParam(exporterPluginID, mgroupIndex, ADBEBasicVideoGroup, &frameRateParam);
 
+        exNewParamInfo chunkParam;
+        exParamValues chunkValues;
+        safeStrCpy(chunkParam.identifier, 256, HAPChunk);
+        chunkParam.paramType = exParamType_int;
+        chunkParam.flags = exParamFlag_none;
+        chunkValues.rangeMin.intValue = 0;
+        chunkValues.rangeMax.intValue = 2;
+        chunkValues.value.intValue = kHapChunkAuto; // TODO: decide default value for Release: Auto or None?
+        chunkValues.disabled = kPrFalse;
+        chunkValues.hidden = kPrFalse;
+        chunkParam.paramValues = chunkValues;
+        exportParamSuite->AddParam(exporterPluginID, mgroupIndex, HAPSpecificCodecGroup, &chunkParam);
+
         exNewParamInfo chunkCountParam;
         exParamValues chunkCountValues;
         safeStrCpy(chunkCountParam.identifier, 256, HAPChunkCount);
         chunkCountParam.paramType = exParamType_int;
-        chunkCountParam.flags = exParamFlag_optional;
+        chunkCountParam.flags = exParamFlag_slider;
         chunkCountValues.rangeMin.intValue = k_chunkingMin;
         chunkCountValues.rangeMax.intValue = k_chunkingMax;
         chunkCountValues.value.intValue = 1;
-        chunkCountValues.disabled = kPrFalse;
+        chunkCountValues.disabled = kPrTrue;
         chunkCountValues.hidden = kPrFalse;
         chunkCountParam.paramValues = chunkCountValues;
         exportParamSuite->AddParam(exporterPluginID, mgroupIndex, HAPSpecificCodecGroup, &chunkCountParam);
@@ -194,6 +214,10 @@ prMALError postProcessParams(exportStdParms *stdParmsP, exPostProcessParamsRec *
     const wchar_t *sampleRateStrings[] = {STR_SAMPLE_RATE_441, STR_SAMPLE_RATE_48};
     const wchar_t *channelTypeStrings[] = {STR_CHANNEL_TYPE_MONO, STR_CHANNEL_TYPE_STEREO, STR_CHANNEL_TYPE_51};
 
+    exOneParamValueRec tempHapChunksParam;
+    HapChunkOption hapChunkOptions[] = { kHapChunkNone, kHapChunkAuto, kHapChunkManual };
+    const wchar_t *hapChunkStrings[] = {STR_HAP_CHUNKS_NONE, STR_HAP_CHUNKS_AUTO, STR_HAP_CHUNKS_MANUAL};
+
 	settings->timeSuite->GetTicksPerSecond(&ticksPerSecond);
     for (csSDK_int32 i = 0; i < sizeof(frameRates) / sizeof(PrTime); i++)
         frameRates[i] = ticksPerSecond / frameRateNumDens[i][0] * frameRateNumDens[i][1];
@@ -257,15 +281,19 @@ prMALError postProcessParams(exportStdParms *stdParmsP, exPostProcessParamsRec *
     copyConvertStringLiteralIntoUTF16(CODEC_SPECIFIC_PARAM_GROUP_NAME, tempString);
     settings->exportParamSuite->SetParamName(exID, 0, HAPSpecificCodecGroup, tempString);
 
+	copyConvertStringLiteralIntoUTF16(STR_HAP_CHUNKS, tempString);
+	settings->exportParamSuite->SetParamName(exID, 0, HAPChunk, tempString);
+    settings->exportParamSuite->ClearConstrainedValues(exID, 0, HAPChunk);
+    for (csSDK_int32 i = 0; i < sizeof(hapChunkOptions) / sizeof(hapChunkOptions[0]); i++)
+    {
+        tempHapChunksParam.intValue = hapChunkOptions[i];
+        copyConvertStringLiteralIntoUTF16(hapChunkStrings[i], tempString);
+        settings->exportParamSuite->AddConstrainedValuePair(exID, 0, HAPChunk, &tempHapChunksParam, tempString);
+    }
+    
     copyConvertStringLiteralIntoUTF16(STR_HAP_CHUNKING, tempString);
     settings->exportParamSuite->SetParamName(exID, 0, HAPChunkCount, tempString);
-    exParamValues chunkCountValues;
-    settings->exportParamSuite->GetParamValue(exID, 0, HAPChunkCount, &chunkCountValues);
-    chunkCountValues.rangeMin.intValue = k_chunkingMin;
-    chunkCountValues.rangeMax.intValue = k_chunkingMax;
-    chunkCountValues.disabled = kPrFalse;
-    chunkCountValues.hidden = kPrFalse;
-    settings->exportParamSuite->ChangeParam(exID, 0, HAPChunkCount, &chunkCountValues);
+    chunkSettingsHandler(exID, settings);
 
     copyConvertStringLiteralIntoUTF16(BASIC_AUDIO_PARAM_GROUP_NAME, tempString);
     settings->exportParamSuite->SetParamName(exID, 0, ADBEBasicAudioGroup, tempString);
@@ -401,5 +429,45 @@ prMALError validateParamChanged(exportStdParms *stdParmsP, exParamChangedRec *va
         settings->exportParamSuite->ChangeParam(exID, 0, ADBEVideoQuality, &toValidate);
     }
 
+    // trigger handler on both settings change and resolution change
+    if (strcmp(validateParamChangedRecP->changedParamIdentifier, HAPChunk) == 0 
+     || strcmp(validateParamChangedRecP->changedParamIdentifier, ADBEVideoWidth) == 0 
+     || strcmp(validateParamChangedRecP->changedParamIdentifier, ADBEVideoHeight) == 0)
+    {
+        chunkSettingsHandler(exID, settings);
+    }
+
     return malNoError;
+}
+
+// Handle chunk setting changes and recalculate auto value
+void chunkSettingsHandler(const csSDK_uint32 exID, ExportSettings *settings)
+{
+	exParamValues hapChunksParam, chunkCountValues, width, height;
+	settings->exportParamSuite->GetParamValue(exID, 0, HAPChunk, &hapChunksParam);
+	settings->exportParamSuite->GetParamValue(exID, 0, HAPChunkCount, &chunkCountValues);
+    chunkCountValues.rangeMin.intValue = k_chunkingMin;
+    chunkCountValues.rangeMax.intValue = k_chunkingMax;
+
+	switch (hapChunksParam.value.intValue)
+	{
+	case kHapChunkNone: // No chunks in fact mean 1 chunk
+		chunkCountValues.value.intValue = 1;
+		chunkCountValues.disabled = kPrTrue;
+		chunkCountValues.hidden = kPrTrue;
+		break;
+	case kHapChunkAuto: // Adjust chunks count to ~ 1920*1200px for each chunk
+		settings->exportParamSuite->GetParamValue(exID, 0, ADBEVideoWidth, &width);
+		settings->exportParamSuite->GetParamValue(exID, 0, ADBEVideoHeight, &height);
+		chunkCountValues.value.intValue = std::min(k_chunkingMax,
+			(int)ceil((float)width.value.intValue * height.value.intValue / k_chunkingBlockSize));
+		chunkCountValues.disabled = kPrTrue;
+		chunkCountValues.hidden = kPrFalse;
+		break;
+	case kHapChunkManual: // Enable slider for manual setting
+		chunkCountValues.disabled = kPrFalse;
+		chunkCountValues.hidden = kPrFalse;
+		break;
+	}
+	settings->exportParamSuite->ChangeParam(exID, 0, HAPChunkCount, &chunkCountValues);
 }

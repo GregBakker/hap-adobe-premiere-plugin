@@ -1,6 +1,7 @@
 #pragma once
 
 #define HAPSpecificCodecGroup           "HAPSpecificCodecGroup"
+#define HAPChunk                        "HAPChunk"
 #define HAPChunkCount                   "HAPChunkCount"
 
 #define HAP_VIDEOFILETYPE				'hap'
@@ -40,6 +41,11 @@
 #define STR_HAP_QUALITY_0               L"Fast"
 #define STR_HAP_QUALITY_1               L"Normal"
 #define STR_HAP_QUALITY_2               L"Best"
+
+#define STR_HAP_CHUNKS                   L"Hap chunks"
+#define STR_HAP_CHUNKS_NONE              L"None"
+#define STR_HAP_CHUNKS_AUTO              L"Auto"
+#define STR_HAP_CHUNKS_MANUAL            L"Manual"
 
 #define TOP_AUDIO_PARAM_GROUP_NAME      L"Audio parameters"
 #define BASIC_AUDIO_PARAM_GROUP_NAME    L"Basic Audio Setings"
