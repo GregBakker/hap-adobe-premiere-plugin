@@ -5,7 +5,8 @@
 
 const int k_chunkingMin = 1;
 const int k_chunkingMax = 64;
-const int k_chunkingBlockSize = 1920*1200;
+const int k_chunkingAutoMax = 16;
+const int k_chunkingAutoBlockSize = 1920*1200;
 enum HapChunkOption {
     kHapChunkNone = 0,
     kHapChunkAuto = 1,
@@ -461,8 +462,8 @@ void chunkSettingsHandler(const csSDK_uint32 exID, ExportSettings *settings)
 	case kHapChunkAuto: // Adjust chunks count to ~ 1920*1200px for each chunk
 		settings->exportParamSuite->GetParamValue(exID, 0, ADBEVideoWidth, &width);
 		settings->exportParamSuite->GetParamValue(exID, 0, ADBEVideoHeight, &height);
-		chunkCountValues.value.intValue = std::min(k_chunkingMax,
-			(int)ceil((float)width.value.intValue * height.value.intValue / k_chunkingBlockSize));
+		chunkCountValues.value.intValue = std::min(k_chunkingAutoMax,
+			(int)ceil((float)width.value.intValue * height.value.intValue / k_chunkingAutoBlockSize));
 		chunkCountValues.disabled = kPrTrue;
 		chunkCountValues.hidden = kPrFalse;
 		break;
