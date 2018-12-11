@@ -12,6 +12,10 @@ enum HapChunkOption {
     kHapChunkAuto = 1,
     kHapChunkManual = 2
 };
+static int roundUpToMultipleOf4(int n)
+{
+	return (n + 3) & ~3;
+}
 void chunkSettingsHandler(const csSDK_uint32 exID, ExportSettings *settings);
 
 prMALError generateDefaultParams(exportStdParms *stdParms, exGenerateDefaultParamRec *generateDefaultParamRec)
@@ -452,6 +456,7 @@ void chunkSettingsHandler(const csSDK_uint32 exID, ExportSettings *settings)
     chunkCountValues.rangeMin.intValue = k_chunkingMin;
     chunkCountValues.rangeMax.intValue = k_chunkingMax;
 
+    csSDK_int32 roundedFrameSize, tempChunkCount;
 	switch (hapChunksParam.value.intValue)
 	{
 	case kHapChunkNone: // No chunks in fact mean 1 chunk
@@ -462,8 +467,13 @@ void chunkSettingsHandler(const csSDK_uint32 exID, ExportSettings *settings)
 	case kHapChunkAuto: // Adjust chunks count to ~ 1920*1200px for each chunk
 		settings->exportParamSuite->GetParamValue(exID, 0, ADBEVideoWidth, &width);
 		settings->exportParamSuite->GetParamValue(exID, 0, ADBEVideoHeight, &height);
-		chunkCountValues.value.intValue = std::min(k_chunkingAutoMax,
-			(int)ceil((float)width.value.intValue * height.value.intValue / k_chunkingAutoBlockSize));
+        roundedFrameSize = roundUpToMultipleOf4(width.value.intValue) * roundUpToMultipleOf4(height.value.intValue);
+        tempChunkCount = std::min(k_chunkingAutoMax, (int)ceil((float)roundedFrameSize / k_chunkingAutoBlockSize));
+        // Make sure auto chunking aligned to dxt block boundaries
+        while ((roundedFrameSize / 16) % tempChunkCount != 0) {
+            tempChunkCount--;
+        }
+        chunkCountValues.value.intValue = tempChunkCount;
 		chunkCountValues.disabled = kPrTrue;
 		chunkCountValues.hidden = kPrFalse;
 		break;
